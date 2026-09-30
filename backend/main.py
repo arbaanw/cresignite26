@@ -1,11 +1,10 @@
 """
 CribeIt analyze API — accepts a product photo + language, returns
-name, short description, and a suggested INR price.
+name, short description, and a suggested INR price via Google GenAI (Gemini).
 """
 
 from __future__ import annotations
 
-import base64
 import json
 import os
 import re
@@ -14,7 +13,8 @@ from typing import Literal
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from openai import OpenAI
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -44,10 +44,17 @@ class AnalyzeResponse(BaseModel):
     suggested_price: float = Field(..., ge=0)
 
 
+def _api_key() -> str:
+    return (
+        os.getenv("GEMINI_API_KEY", "").strip()
+        or os.getenv("GOOGLE_API_KEY", "").strip()
+    )
+
+
 def _use_mock() -> bool:
     if os.getenv("MOCK_AI", "").lower() in {"1", "true", "yes"}:
         return True
-    return not bool(os.getenv("OPENAI_API_KEY", "").strip())
+    return not bool(_api_key())
 
 
 def _mock_analyze(language: Language) -> AnalyzeResponse:
@@ -85,10 +92,9 @@ def _extract_json(text: str) -> dict:
 
 
 def _vision_analyze(image_bytes: bytes, content_type: str, language: Language) -> AnalyzeResponse:
-    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    client = genai.Client(api_key=_api_key())
+    model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     lang_label = LANGUAGE_LABELS[language]
-    b64 = base64.b64encode(image_bytes).decode("ascii")
     mime = content_type or "image/jpeg"
 
     prompt = f"""You are helping Indian artisans list handmade crafts on a marketplace.
@@ -104,25 +110,19 @@ Rules:
 - suggested_price must be a number, not a string.
 - Do not wrap the JSON in markdown fences."""
 
-    completion = client.chat.completions.create(
+    response = client.models.generate_content(
         model=model,
-        temperature=0.4,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime};base64,{b64}"},
-                    },
-                ],
-            }
+        contents=[
+            types.Part.from_bytes(data=image_bytes, mime_type=mime),
+            prompt,
         ],
-        response_format={"type": "json_object"},
+        config=types.GenerateContentConfig(
+            temperature=0.4,
+            response_mime_type="application/json",
+        ),
     )
 
-    raw = completion.choices[0].message.content or "{}"
+    raw = response.text or "{}"
     data = _extract_json(raw)
     try:
         return AnalyzeResponse(
@@ -136,7 +136,7 @@ Rules:
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "mock_ai": _use_mock()}
+    return {"ok": True, "mock_ai": _use_mock(), "provider": "google-genai"}
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)

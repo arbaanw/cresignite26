@@ -56,12 +56,25 @@ class _AnalyzeResultScreenState extends State<AnalyzeResultScreen> {
           language: widget.language,
           suggestedPrice: price,
           imagePath: widget.imageFile.path,
+          remoteImageUrl: widget.result.editedImageUrl,
         );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Product saved to your catalog')),
     );
     Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Widget _previewImage() {
+    final url = widget.result.editedImageUrl;
+    if (url != null) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Image.file(widget.imageFile, fit: BoxFit.cover),
+      );
+    }
+    return Image.file(widget.imageFile, fit: BoxFit.cover);
   }
 
   @override
@@ -75,7 +88,7 @@ class _AnalyzeResultScreenState extends State<AnalyzeResultScreen> {
             borderRadius: BorderRadius.circular(18),
             child: AspectRatio(
               aspectRatio: 4 / 3,
-              child: Image.file(widget.imageFile, fit: BoxFit.cover),
+              child: _previewImage(),
             ),
           ),
           const SizedBox(height: 20),

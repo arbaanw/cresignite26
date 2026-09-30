@@ -1,10 +1,7 @@
 # CribeIt Analyze API
 
-FastAPI service that accepts a product photo + language and returns:
-
-- `name`
-- `description` (in the chosen language)
-- `suggested_price` (INR)
+FastAPI service that accepts a product photo + language and returns a **hardcoded
+demo listing** plus a static edited saree image URL. No Gemini/OpenAI calls.
 
 ## Setup
 
@@ -16,19 +13,13 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-### Real AI (OpenAI vision)
-
-Set in `.env`:
+Optional in `.env`:
 
 ```
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4o-mini
-MOCK_AI=false
+PUBLIC_BASE_URL=https://your-deployed-host
 ```
 
-### Mock AI (no key needed)
-
-Leave `OPENAI_API_KEY` empty, or set `MOCK_AI=true`. The endpoint still works and returns a seeded saree listing in `en` / `hi` / `ta`.
+Used when building `edited_image_url` behind a reverse proxy.
 
 ## Run
 
@@ -36,7 +27,9 @@ Leave `OPENAI_API_KEY` empty, or set `MOCK_AI=true`. The endpoint still works an
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+- Health: `GET /health`
+- Demo image: `GET /demo/edited_saree.png`
+- Analyze: `POST /analyze`
 
 ## Endpoint
 
@@ -44,16 +37,17 @@ Health check: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 
 | field | type | notes |
 |-------|------|--------|
-| `image` | file | jpg/png/webp |
+| `image` | file | required; validated then ignored for AI |
 | `language` | string | `en`, `hi`, or `ta` |
 
 Response:
 
 ```json
 {
-  "name": "Handwoven Cotton Saree",
-  "description": "...",
-  "suggested_price": 2850
+  "name": "Handwoven Silk Saree",
+  "description": "A traditional handwoven silk saree crafted by skilled Indian artisans.",
+  "suggested_price": 4500,
+  "edited_image_url": "http://127.0.0.1:8000/demo/edited_saree.png"
 }
 ```
 

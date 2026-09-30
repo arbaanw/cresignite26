@@ -185,6 +185,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _hero(Product product) {
+    final remote = product.remoteImageUrl;
+    if (remote != null && remote.isNotEmpty) {
+      return SizedBox(
+        width: double.infinity,
+        height: 200,
+        child: Image.network(remote, fit: BoxFit.cover),
+      );
+    }
     final path = product.localImagePath;
     if (path != null && File(path).existsSync()) {
       return SizedBox(

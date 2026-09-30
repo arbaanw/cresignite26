@@ -119,6 +119,7 @@ class Product {
   bool imageEnhanced;
   int visual; // selects a placeholder illustration style
   String? localImagePath; // on-device photo from camera/gallery analyze flow
+  String? remoteImageUrl; // edited demo image URL from /analyze
 
   Product({
     required this.id,
@@ -140,6 +141,7 @@ class Product {
     this.imageEnhanced = false,
     this.visual = 0,
     this.localImagePath,
+    this.remoteImageUrl,
   });
 
   String descriptionFor(AppLanguage lang) =>
@@ -165,6 +167,7 @@ class Product {
         imageEnhanced: imageEnhanced,
         visual: visual,
         localImagePath: localImagePath,
+        remoteImageUrl: remoteImageUrl,
       );
 
   Map<String, dynamic> toJson() => {
@@ -187,6 +190,7 @@ class Product {
         'imageEnhanced': imageEnhanced,
         'visual': visual,
         'localImagePath': localImagePath,
+        'remoteImageUrl': remoteImageUrl,
       };
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
@@ -209,5 +213,6 @@ class Product {
         imageEnhanced: json['imageEnhanced'] ?? false,
         visual: json['visual'] ?? 0,
         localImagePath: json['localImagePath'] as String?,
+        remoteImageUrl: json['remoteImageUrl'] as String?,
       );
 }

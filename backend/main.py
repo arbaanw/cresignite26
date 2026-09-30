@@ -1,20 +1,18 @@
 """
 CribeIt analyze API — accepts a product photo + language, returns
-name, short description, and a suggested INR price via Google GenAI (Gemini).
+a hardcoded demo listing plus a static edited saree image URL.
 """
 
 from __future__ import annotations
 
-import json
-import os
-import re
+from pathlib import Path
 from typing import Literal
+import os
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from google import genai
-from google.genai import types
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -27,6 +25,9 @@ LANGUAGE_LABELS = {
     "ta": "Tamil",
 }
 
+DEMO_DIR = Path(__file__).resolve().parent / "demo"
+EDITED_SAREE_FILENAME = "edited_saree.png"
+
 app = FastAPI(title="CribeIt Analyze API", version="0.1.0")
 
 app.add_middleware(
@@ -37,110 +38,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/demo", StaticFiles(directory=str(DEMO_DIR)), name="demo")
+
 
 class AnalyzeResponse(BaseModel):
     name: str
     description: str
     suggested_price: float = Field(..., ge=0)
+    edited_image_url: str
 
 
-def _api_key() -> str:
-    return (
-        os.getenv("GEMINI_API_KEY", "").strip()
-        or os.getenv("GOOGLE_API_KEY", "").strip()
+def _public_base(request: Request) -> str:
+    configured = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    return str(request.base_url).rstrip("/")
+
+
+def _demo_response(request: Request) -> AnalyzeResponse:
+    base = _public_base(request)
+    return AnalyzeResponse(
+        name="Handwoven Silk Saree",
+        description=(
+            "A traditional handwoven silk saree crafted by skilled Indian artisans."
+        ),
+        suggested_price=4500,
+        edited_image_url=f"{base}/demo/{EDITED_SAREE_FILENAME}",
     )
-
-
-def _use_mock() -> bool:
-    if os.getenv("MOCK_AI", "").lower() in {"1", "true", "yes"}:
-        return True
-    return not bool(_api_key())
-
-
-def _mock_analyze(language: Language) -> AnalyzeResponse:
-    """Offline fallback so the Flutter ↔ FastAPI pipe can be tested without a key."""
-    copy = {
-        "en": (
-            "Handwoven Cotton Saree",
-            "Traditional handwoven cotton saree crafted by skilled artisans. "
-            "Lightweight, breathable, and inspired by timeless regional patterns.",
-        ),
-        "hi": (
-            "हस्तनिर्मित सूती साड़ी",
-            "कुशल कारीगरों द्वारा हाथ से बुनी गई पारंपरिक सूती साड़ी। "
-            "हल्की, सांस लेने योग्य और पारंपरिक डिज़ाइनों से प्रेरित।",
-        ),
-        "ta": (
-            "கைத்தறி பருத்தி புடவை",
-            "திறமையான கைவினைஞர்களால் நெய்யப்பட்ட பாரம்பரிய பருத்தி புடவை. "
-            "இலகுவானது, காற்றோட்டமானது, பாரம்பரிய வடிவமைப்புகளால் ஈர்க்கப்பட்டது.",
-        ),
-    }
-    name, description = copy[language]
-    return AnalyzeResponse(name=name, description=description, suggested_price=2850.0)
-
-
-def _extract_json(text: str) -> dict:
-    text = text.strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            raise ValueError("Model did not return JSON")
-        return json.loads(match.group(0))
-
-
-def _vision_analyze(image_bytes: bytes, content_type: str, language: Language) -> AnalyzeResponse:
-    client = genai.Client(api_key=_api_key())
-    model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
-    lang_label = LANGUAGE_LABELS[language]
-    mime = content_type or "image/jpeg"
-
-    prompt = f"""You are helping Indian artisans list handmade crafts on a marketplace.
-
-Look at the product photo and return ONLY valid JSON with these keys:
-- "name": short product name (max ~6 words)
-- "description": 1-2 sentences marketplace description written in {lang_label}
-- "suggested_price": integer INR retail price suggestion (no currency symbol)
-
-Rules:
-- Focus on handmade / craft goods from India when plausible.
-- If the object is unclear, still give a best-effort craft listing.
-- suggested_price must be a number, not a string.
-- Do not wrap the JSON in markdown fences."""
-
-    response = client.models.generate_content(
-        model=model,
-        contents=[
-            types.Part.from_bytes(data=image_bytes, mime_type=mime),
-            prompt,
-        ],
-        config=types.GenerateContentConfig(
-            temperature=0.4,
-            response_mime_type="application/json",
-        ),
-    )
-
-    raw = response.text or "{}"
-    data = _extract_json(raw)
-    try:
-        return AnalyzeResponse(
-            name=str(data["name"]).strip(),
-            description=str(data["description"]).strip(),
-            suggested_price=float(data["suggested_price"]),
-        )
-    except (KeyError, TypeError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail=f"Invalid model response: {exc}") from exc
 
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": True, "mock_ai": _use_mock(), "provider": "google-genai"}
+    return {
+        "ok": True,
+        "mock_ai": True,
+        "provider": "hardcoded-demo",
+        "edited_image": f"/demo/{EDITED_SAREE_FILENAME}",
+    }
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(
+    request: Request,
     image: UploadFile = File(...),
     language: Language = Form("en"),
 ) -> AnalyzeResponse:
@@ -153,16 +92,6 @@ async def analyze(
     if len(image_bytes) > 12 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image too large (max 12MB)")
 
-    if _use_mock():
-        return _mock_analyze(language)
-
-    try:
-        return _vision_analyze(
-            image_bytes=image_bytes,
-            content_type=image.content_type or "image/jpeg",
-            language=language,
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:  # noqa: BLE001 — surface upstream errors cleanly
-        raise HTTPException(status_code=502, detail=f"AI analyze failed: {exc}") from exc
+    # Demo: validate upload only — no Gemini/OpenAI processing.
+    _ = language
+    return _demo_response(request)

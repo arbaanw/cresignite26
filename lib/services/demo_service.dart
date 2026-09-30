@@ -141,6 +141,7 @@ class AppState extends ChangeNotifier {
     required AppLanguage language,
     required double suggestedPrice,
     String? imagePath,
+    String? remoteImageUrl,
   }) async {
     final id = 'ai-${DateTime.now().millisecondsSinceEpoch}';
     final product = Product(
@@ -163,6 +164,7 @@ class AppState extends ChangeNotifier {
       imageEnhanced: true,
       visual: products.length % 5,
       localImagePath: imagePath,
+      remoteImageUrl: remoteImageUrl,
     );
     products.insert(0, product);
     activeProduct = product;

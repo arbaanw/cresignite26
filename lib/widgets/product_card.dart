@@ -42,6 +42,10 @@ class ProductCard extends StatelessWidget {
   }
 
   Widget _thumb(double width, double height) {
+    final remote = product.remoteImageUrl;
+    if (remote != null && remote.isNotEmpty) {
+      return Image.network(remote, width: width, height: height, fit: BoxFit.cover);
+    }
     final path = product.localImagePath;
     if (path != null && File(path).existsSync()) {
       return Image.file(File(path), width: width, height: height, fit: BoxFit.cover);

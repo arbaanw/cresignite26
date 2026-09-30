@@ -6,14 +6,16 @@ import 'dart:convert';
 
 import '../models/analyze_result.dart';
 
-/// Talks to the CribeIt FastAPI backend.
+/// Talks to the CribeIt FastAPI backend (hardcoded demo analyze + static edited image).
 ///
 /// Override [baseUrl] at build time if needed:
 ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.10:8000
 class ApiService {
-  ApiService({String? baseUrl}) : baseUrl = baseUrl ?? _defaultBaseUrl();
+  ApiService({String? baseUrl}) : baseUrl = _normalizeBaseUrl(baseUrl ?? _defaultBaseUrl());
 
   final String baseUrl;
+
+  static String _normalizeBaseUrl(String url) => url.replaceAll(RegExp(r'/+$'), '');
 
   static String _defaultBaseUrl() {
     const fromEnv = String.fromEnvironment('API_BASE_URL');

@@ -93,7 +93,7 @@ def _extract_json(text: str) -> dict:
 
 def _vision_analyze(image_bytes: bytes, content_type: str, language: Language) -> AnalyzeResponse:
     client = genai.Client(api_key=_api_key())
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
     lang_label = LANGUAGE_LABELS[language]
     mime = content_type or "image/jpeg"
 
